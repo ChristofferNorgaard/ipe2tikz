@@ -26,14 +26,16 @@
 label = "TikZ export"
 
 methods = {
+   { label="Quick export", run=run }, 
    { label="Export to File", run=run },
-   { label="Export to Text Object", run=run }
+ { label="Export to Text Object", run=run },
 }
 
 about = "Export readable TikZ code"
 
-shortcuts.ipelet_1_tikz = "Alt+T"
+shortcuts.ipelet_1_tikz = "Ctrl+T"
 shortcuts.ipelet_2_tikz = "Ctrl+Shift+T"
+shortcuts.ipelet_3_tkiz = "Ctrl+Alt+T"
 
 -- Globals
 write = _G.io.write
@@ -71,7 +73,7 @@ end
 
 -- Convert a number to a string, omitting trailing zeros after the decimal, and
 -- rounding.
-function sround(num, idp)
+	function sround(num, idp)
    idp = idp or 4
    num = round(num, idp)
    local neg = (num < 0)
@@ -1506,6 +1508,26 @@ function export_grid(size)
             .. "] (0,0) grid " .. svec(size) .. ";\n")
 end
 
+function get_auto_filename(model)
+   local curname = params.filename or model.file_name or "untitled.tex"
+   local function extract_dir()
+      local dir
+      if curname then dir = curname:match(prefs.dir_pattern) end
+      if not dir then dir = prefs.save_as_directory end
+      return dir
+   end
+   local function extract_name()
+      local name
+      name = curname:match(prefs.basename_pattern)
+      -- maybe there was no "/" in the file name
+      if not name then name = curname end
+      name = name:match("(.*)%.[^.]+$") .. ".tex"
+      return name
+   end
+   local name = extract_name()
+   curname = extract_dir() .. prefs.fsep .. name
+   return curname
+end
 
 -- Run the export settings dialog
 function run_file_dialog(model)
@@ -1532,7 +1554,7 @@ function run_file_dialog(model)
    d:set("drawgrid", params.drawgrid)
 
    -- File dialog
-   local curname = params.filename or model.file_name or "Untitled.tex"
+   local curname = params.filename or model.file_name or "untitled.tex"
    local function extract_dir()
       local dir
       if curname then dir = curname:match(prefs.dir_pattern) end
@@ -1548,8 +1570,8 @@ function run_file_dialog(model)
       return name
    end
    local function filedialog()
-      local n = ipeui.fileDialog(model.ui:win(), "save", "TikZ Output File",
-                                 {"TeX (*.tex)", "*.tex"},
+      local n = ipeui.filedialog(model.ui:win(), "save", "tikz output file",
+                                 {"tex (*.tex)", "*.tex"},
                                  extract_dir(), extract_name(), 1)
       if n then curname = n end
       d:set("filename", extract_name())
@@ -1629,11 +1651,21 @@ params_file = {
    filename=nil
 }
 
+params_auto = {
+   fulldoc=false,
+   stylesheets=false,
+   scopeonly=false,
+   colors=true,
+   drawgrid=false,
+   filename=nil
+}
+
 params = {}
 
 function run(model, num)
-   local do_file = (num == 1)
-   local do_text = (num == 2)
+   local do_file = (num == 1) or (num == 2)
+   local do_text = (num == 3)
+   local do_auto = (num == 1)
 
    local page = model:page()
    local sheets = model.doc:sheets()
@@ -1642,9 +1674,12 @@ function run(model, num)
    indent = ""
 
    -- Run the parameters dialog
-   if do_file then
+   if do_file and (not do_auto) then
       params = params_file
       if not run_file_dialog(model) then return end
+   elseif do_auto then
+      params = params_auto
+      params.filename = get_auto_filename(model)
    elseif do_text then
       params = params_text
       if #model:selection() == 0 then
